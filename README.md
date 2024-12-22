@@ -13,6 +13,7 @@ Update the macro postions to match your resolution.
 (
 Line 2: This line is used to handle scenarios where the script fails and you need to restart. You input the number of tabs to begin with, ensuring that the process resumes from the correct point.
   You only need to change this if your script fails for some reason.
+  
 Line 4: Update this line with the window currently displayed on the left half of your screen, specifically the one showing the list of receipts.
 Line 7: Perform the save operation here and also press the "4" key (this step may not be strictly necessary, but it has helped ensure better results in my experience).
 Line 8: This marks the start of the logic loop. There are two key variables that determine its behavior:
