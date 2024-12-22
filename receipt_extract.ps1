@@ -18,170 +18,157 @@
 # What "I" did was create a gmail account just for this.
 # I added it to outlook on my device.
 # You update line28 (replace "Account name" but keep the quotes example "albertsons@gmail.com")
-# I will output a CSV to your desktop by default to a file call extracted_data.csv - You can change the path in the variable just below.
+# I will output a access database to your MyDocuments folder by default to a file call Receipts.accdb - You can change the path in the variable just below.
+# Script updated to use AccessDB vs CSV and added duplicate checks in the event you requested the same receipt twice.
 #
-#set the output
-$outputPath = "$([Environment]::GetFolderPath('Desktop'))\extracted_data.csv"
+#set the email address
+$emailaccountname = "account.name@gmail.com"
+
+#set the output location
+# Path to the Access database
+$accessDbPath = "$([Environment]::GetFolderPath('MyDocuments'))\Receipts.accdb"
+
+# Access database connection string
+$connectionString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=$accessDbPath;"
+
+# Create Access database if it does not exist
+if (-not (Test-Path $accessDbPath)) {
+    Write-Host "Creating Access database..."
+    $catalog = New-Object -ComObject ADOX.Catalog
+    $catalog.Create($connectionString)
+    
+    $connection = New-Object -ComObject ADODB.Connection
+    $connection.Open($connectionString)
+    
+    $createTableQuery = @"
+    CREATE TABLE Receipts (
+        ID AUTOINCREMENT PRIMARY KEY,
+        Email TEXT(255),
+        TransactionNumber TEXT(50),
+        AuthorizationTime TEXT(50),
+        AuthorizationDate TEXT(50),
+        ReferenceNumber TEXT(50),
+        AuthorizationCode TEXT(50),
+        Amount TEXT(50),
+        CardEndingIn TEXT(50),
+        Calculated TEXT(50),
+        SalesTax TEXT(50),
+        TaxesAndFees TEXT(50),
+        Subtotal TEXT(50),
+        TotalSavings TEXT(50),
+        TotalItems TEXT(50),
+        ProductName TEXT(255),
+        ProductPrice TEXT(50),
+        ProductQuantity TEXT(50),
+        ProductRegularPrice TEXT(50)
+    );
+"@
+
+    $connection.Execute($createTableQuery) | Out-Null
+    $connection.Close()
+    Write-Host "Database and table created successfully."
+}
 
 # Create the Outlook application object
 $outlook = New-Object -ComObject Outlook.Application
 $namespace = $outlook.GetNamespace("MAPI")
 
-# Get the Inbox folder for your Gmail account (it should be listed as one of your email accounts in Outlook)
-$inbox = $namespace.Folders.Item("account name")  # Replace with your account name
-$gmailFolder = $inbox.Folders.Item("Inbox")  # Access the Inbox folder of Gmail
-$messages = $gmailFolder.Items  # Get all messages in the Inbox
+# Get the Inbox folder for your Gmail account
+$inbox = $namespace.Folders.Item($emailaccountname)
+$gmailFolder = $inbox.Folders.Item("Inbox")
+$messages = $gmailFolder.Items
 
 # Ensure there are at least three emails
 if ($messages.Count -ge 1) {
-    $data = @()
-    for ($i = 1; $i -le $messages.Count; $i++) {
-        # Get the message from the inbox
-        $message = $messages.Item($i)
+    $connection = New-Object -ComObject ADODB.Connection
+    $connection.Open($connectionString)
 
-        # Extract basic details from the message
+    for ($i = 1; $i -le $messages.Count; $i++) {
+        $message = $messages.Item($i)
         $subject = $message.Subject
         $receivedTime = $message.ReceivedTime
         $htmlBody = $message.HTMLBody
-        
-        Write-Host "Processing Email $i`:"
-        Write-Host "Subject: $subject"
-        Write-Host "Received: $receivedTime"
-        
-        # Regex patterns for the fields we need to extract:
-        
-        # Transaction Number (adjust based on email format)
+
+        # Extract data using regex patterns
         $transactionNumberPattern = 'Transaction Number\s*</td>\s*<td[^>]*>\s*([\d\s]+)\s*</td>'
-        $transactionNumberMatch = [regex]::Match($htmlBody, $transactionNumberPattern)
-        $transactionNumber = if ($transactionNumberMatch.Success) { $transactionNumberMatch.Groups[1].Value.Replace(' ', '') } else { "Not found" }
+        $transactionNumber = ([regex]::Match($htmlBody, $transactionNumberPattern)).Groups[1].Value -replace ' '
 
-        # Authorization Time (adjust based on email format)
         $authorizationTimePattern = 'Authorization Time\s*</td>\s*<td[^>]*>\s*([\d:]+\s*[APM]{2})\s*</td>'
-        $authorizationTimeMatch = [regex]::Match($htmlBody, $authorizationTimePattern)
-        $authorizationTime = if ($authorizationTimeMatch.Success) { $authorizationTimeMatch.Groups[1].Value } else { "Not found" }
-        
-        # Authorization Date (adjust based on email format)
+        $authorizationTime = ([regex]::Match($htmlBody, $authorizationTimePattern)).Groups[1].Value
+
         $authorizationDatePattern = 'Authorization Date\s*</td>\s*<td[^>]*>\s*([A-Za-z]{3}\s+\d{2},\s+\d{4})\s*</td>'
-        $authorizationDateMatch = [regex]::Match($htmlBody, $authorizationDatePattern)
-        $authorizationDate = if ($authorizationDateMatch.Success) { $authorizationDateMatch.Groups[1].Value } else { "Not found" }
-        
-        # Reference Number (adjust based on email format)
+        $authorizationDate = ([regex]::Match($htmlBody, $authorizationDatePattern)).Groups[1].Value
+
         $referenceNumberPattern = 'Reference Number\s*</td>\s*<td[^>]*>\s*(\d+)\s*</td>'
-        $referenceNumberMatch = [regex]::Match($htmlBody, $referenceNumberPattern)
-        $referenceNumber = if ($referenceNumberMatch.Success) { $referenceNumberMatch.Groups[1].Value } else { "Not found" }
-        
-        # Authorization Code (adjust based on email format)
+        $referenceNumber = ([regex]::Match($htmlBody, $referenceNumberPattern)).Groups[1].Value
+
         $authorizationCodePattern = 'Authorization Code\s*</td>\s*<td[^>]*>\s*([A-Za-z0-9]+)\s*</td>'
-        $authorizationCodeMatch = [regex]::Match($htmlBody, $authorizationCodePattern)
-        $authorizationCode = if ($authorizationCodeMatch.Success) { $authorizationCodeMatch.Groups[1].Value } else { "Not found" }
-        
-        # Amount (adjust based on email format)
+        $authorizationCode = ([regex]::Match($htmlBody, $authorizationCodePattern)).Groups[1].Value
+
         $amountPattern = 'Amount\s*</td>\s*<td[^>]*>\s*\$([\d.]+)\s*</td>'
-        $amountMatch = [regex]::Match($htmlBody, $amountPattern)
-        $amount = if ($amountMatch.Success) { $amountMatch.Groups[1].Value } else { "Not found" }
-        
-        # Card ending in (adjust based on email format)
+        $amount = ([regex]::Match($htmlBody, $amountPattern)).Groups[1].Value
+
         $cardEndingPattern = 'Card ending in.*?(\d{4})'
-        $cardEndingMatch = [regex]::Match($htmlBody, $cardEndingPattern)
-        $cardEnding = if ($cardEndingMatch.Success) { $cardEndingMatch.Groups[1].Value } else { "Not found" }
-        
-        # Calculated (adjust based on email format)
+        $cardEnding = ([regex]::Match($htmlBody, $cardEndingPattern)).Groups[1].Value
+
         $calculatedPattern = 'Calculated\s*</td>\s*<td[^>]*>\s*\$([\d.]+)\s*</td>'
-        $calculatedMatch = [regex]::Match($htmlBody, $calculatedPattern)
-        $calculated = if ($calculatedMatch.Success) { $calculatedMatch.Groups[1].Value } else { "Not found" }
-        
-        # Sales Tax (adjust based on email format)
+        $calculated = ([regex]::Match($htmlBody, $calculatedPattern)).Groups[1].Value
+
         $salesTaxPattern = 'Sales Tax\s*</td>\s*<td[^>]*>\s*\$([\d.]+)\s*</td>'
-        $salesTaxMatch = [regex]::Match($htmlBody, $salesTaxPattern)
-        $salesTax = if ($salesTaxMatch.Success) { $salesTaxMatch.Groups[1].Value } else { "Not found" }
-        
-        # Taxes and Fees (adjust based on email format)
+        $salesTax = ([regex]::Match($htmlBody, $salesTaxPattern)).Groups[1].Value
+
         $taxesFeesPattern = 'Taxes and Fees\s*</td>\s*<td[^>]*>\s*\$([\d.]+)\s*</td>'
-        $taxesFeesMatch = [regex]::Match($htmlBody, $taxesFeesPattern)
-        $taxesFees = if ($taxesFeesMatch.Success) { $taxesFeesMatch.Groups[1].Value } else { "Not found" }
-        
-        # Subtotal (adjust based on email format)
+        $taxesFees = ([regex]::Match($htmlBody, $taxesFeesPattern)).Groups[1].Value
+
         $subtotalPattern = 'Subtotal\s*</td>\s*<td[^>]*>\s*\$([\d.]+)\s*</td>'
-        $subtotalMatch = [regex]::Match($htmlBody, $subtotalPattern)
-        $subtotal = if ($subtotalMatch.Success) { $subtotalMatch.Groups[1].Value } else { "Not found" }
-        
-        # Total Savings (adjust based on email format)
+        $subtotal = ([regex]::Match($htmlBody, $subtotalPattern)).Groups[1].Value
+
         $totalSavingsPattern = 'Total Savings\s*</td>\s*<td[^>]*>\s*-\$([\d.]+)\s*</td>'
-        $totalSavingsMatch = [regex]::Match($htmlBody, $totalSavingsPattern)
-        $totalSavings = if ($totalSavingsMatch.Success) { $totalSavingsMatch.Groups[1].Value } else { "Not found" }
-        
-        # Total Items (adjust based on email format)
+        $totalSavings = ([regex]::Match($htmlBody, $totalSavingsPattern)).Groups[1].Value
+
         $totalItemsPattern = 'Total Items.*?(\d+)'
-        $totalItemsMatch = [regex]::Match($htmlBody, $totalItemsPattern)
-        $totalItems = if ($totalItemsMatch.Success) { $totalItemsMatch.Groups[1].Value } else { "Not found" }
+        $totalItems = ([regex]::Match($htmlBody, $totalItemsPattern)).Groups[1].Value
 
-        # Extract product details (adjust based on email format)
-        $productPattern = '<tr>\s*<td[^>]*>\s*(.*?)\s*</td>\s*<td[^>]*>\s*\$([\d.]+)\s*</td>\s*</tr>\s*<tr>\s*<td[^>]*>\s*Quantity:\s*(\d+)\s*</td>\s*</tr>(?:\s*<tr>\s*<td[^>]*>\s*Regular Price\s*\$\s*([\d.]+)\s*</td>\s*</tr>)?'
-        $matches = [regex]::Matches($htmlBody, $productPattern)
-        $productList = @()
-        foreach ($match in $matches) {
-            $productName = $match.Groups[1].Value.Trim()
-            $productPrice = $match.Groups[2].Value.Trim()
-            $productQuantity = $match.Groups[3].Value.Trim()
-            $productRegularPrice = if ($match.Groups[4].Success) { $match.Groups[4].Value.Trim() } else { "N/A" }
-            $productList += [PSCustomObject]@{
-                Name = $productName
-                Price = $productPrice
-                Quantity = $productQuantity
-                RegularPrice = $productRegularPrice
+        $productPattern = '<tr>\s*<td[^>]*>\s*(.*?)\s*</td>\s*<td[^>]*>\s*\$([\d.]+)\s*</td>\s*</tr>\s*<tr>\s*<td[^>]*>\s*Quantity:\s*(\d+)\s*</td>'
+        $products = [regex]::Matches($htmlBody, $productPattern)
+
+        # Check for duplicates
+        $checkQuery = "SELECT COUNT(*) FROM Receipts WHERE TransactionNumber = '$transactionNumber' AND ReferenceNumber = '$referenceNumber'"
+        $recordset = $connection.Execute($checkQuery)
+        $count = $recordset.Fields.Item(0).Value
+
+        if ($count -eq 0) {
+            foreach ($product in $products) {
+                $productName = $product.Groups[1].Value
+                $productPrice = $product.Groups[2].Value
+                $productQuantity = $product.Groups[3].Value
+
+                # Escape single quotes in the product name to prevent SQL errors
+                $escapedProductName = $productName -replace "'", "''"
+                $escapedProductPrice = $productPrice -replace "'", "''"
+                $escapedProductQuantity = $productQuantity -replace "'", "''"
+
+                $insertQuery = @"
+INSERT INTO Receipts (
+    Email, TransactionNumber, AuthorizationTime, AuthorizationDate, ReferenceNumber, AuthorizationCode,
+    Amount, CardEndingIn, Calculated, SalesTax, TaxesAndFees, Subtotal, TotalSavings, TotalItems,
+    ProductName, ProductPrice, ProductQuantity, ProductRegularPrice
+) VALUES (
+    '$($message.SenderEmailAddress)', '$transactionNumber', '$authorizationTime', 
+    '$authorizationDate', '$referenceNumber', '$authorizationCode', 
+    '$amount', '$cardEnding', '$calculated', '$salesTax', 
+    '$taxesFees', '$subtotal', '$totalSavings', '$totalItems', 
+    '$escapedProductName', '$escapedProductPrice', '$escapedProductQuantity', '$escapedProductPrice'
+);
+"@
+                $connection.Execute($insertQuery) | Out-Null
             }
-        }
-
-        # Add extracted details to data array
-        $data += [PSCustomObject]@{
-            Email = $i
-            TransactionNumber = $transactionNumber
-            AuthorizationTime = $authorizationTime
-            AuthorizationDate = $authorizationDate
-            ReferenceNumber = $referenceNumber
-            AuthorizationCode = $authorizationCode
-            Amount = $amount
-            CardEndingIn = $cardEnding
-            Calculated = $calculated
-            SalesTax = $salesTax
-            TaxesAndFees = $taxesFees
-            Subtotal = $subtotal
-            TotalSavings = $totalSavings
-            TotalItems = $totalItems
-            Products = $productList
-        }
-    }}
-# Save data to CSV
-$headers = @("Email", "Transaction Number", "Authorization Time", "Authorization Date", "Reference Number", "Authorization Code", "Amount", "Card Ending In", "Calculated", "Sales Tax", "Taxes and Fees", "Subtotal", "Total Savings", "Total Items", "Product Name", "Product Price", "Product Quantity", "Product Regular Price")
-
-# Initialize an array to hold the flattened data
-$flattenedData = @()
-
-foreach ($emailData in $data) {
-    foreach ($product in $emailData.Products) {
-        $flattenedData += [PSCustomObject]@{
-            Email = $emailData.Email
-            TransactionNumber = $emailData.TransactionNumber
-            AuthorizationTime = $emailData.AuthorizationTime
-            AuthorizationDate = $emailData.AuthorizationDate
-            ReferenceNumber = $emailData.ReferenceNumber
-            AuthorizationCode = $emailData.AuthorizationCode
-            Amount = $emailData.Amount
-            CardEndingIn = $emailData.CardEndingIn
-            Calculated = $emailData.Calculated
-            SalesTax = $emailData.SalesTax
-            TaxesAndFees = $emailData.TaxesAndFees
-            Subtotal = $emailData.Subtotal
-            TotalSavings = $emailData.TotalSavings
-            TotalItems = $emailData.TotalItems
-            ProductName = $product.Name
-            ProductPrice = $product.Price
-            ProductQuantity = $product.Quantity
-            ProductRegularPrice = $product.RegularPrice
+        } else {
+            Write-Host "Duplicate record found for TransactionNumber: $transactionNumber, ReferenceNumber: $referenceNumber. Skipping insertion."
         }
     }
+    $connection.Close()
+    Write-Host "Data inserted successfully."
+} else {
+    Write-Host "No emails found in the specified folder."
 }
-
-$flattenedData | Export-Csv -Path $outputPath -NoTypeInformation
-
-Write-Host "Data has been successfully written to $outputPath."
