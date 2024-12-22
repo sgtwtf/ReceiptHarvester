@@ -1,7 +1,7 @@
 /*
 This is the script I made that allos you to request every reciept. I have hundrest and they don't have a download all button so you have to click on each one. Each time you go back it takes you to the top of the page. So my fix was to use TAB to select the next time. This will add 1 each time it run and it will go forever so you have to watch it. you may have to adjust where the clicking happens to match your resolution vs mine. Just update line 18 to the email address you wanted to use.
 */
-clicking_to_be_done := 39
+clicking_to_be_done := 0
 Start:
 WinActivate, Payment Methods | safeway - Work - Microsoft​ Edge ahk_class Chrome_WidgetWin_1
 Sleep, 333
@@ -9,9 +9,6 @@ clicking_to_be_done += 1
 Tab:
 WinActivate, Payment Methods | safeway and 1 more page - Work - Microsoft​ Edge
 Sleep, 333
-/*
-clicking_to_be_done += 1
-*/
 While %clicking_done%<%clicking_to_be_done%
 {
     Send, {Tab}
@@ -33,7 +30,7 @@ Click, 852, 376 Left, 1
 Sleep, 2000
 Click, 656, 642 Left, 1
 Sleep, 2000
-SendRaw, account@gmail.com
+SendRaw, **youremailhere***@*****.com
 Sleep, 500
 Click, 718, 744 Left, 1
 Sleep, 2000
