@@ -1,30 +1,8 @@
-# If you use Albertsons, Safeway, etc., you can get your digital receipts emailed to you.  
-# With this script, you can extract the HTML from the messages and create a spreadsheet of where your money goes.  
-# Fun note: I joke with my spouse that the only reason I made this was to prove how much I spent on bags from the store.  
-# The true story is:  
-#   A) I was bored, and this was fun to me.  
-#   B) I spend close to a thousand dollars at these stores a month, and I wanted to know why.  
-# With this, I get a date and time stamp so I can extract what times or days I’m going.  
-# I get the price of an item over time so I can make my own inflation statistics for my area.  
-# I can see what items I’m purchasing most often (so I can buy in bulk).  
-# A pipe dream is if I can automate the process and store the data into a web app, then I can know what I should have at home so I don’t buy something I don’t need.  
-# An example would be adding expiration times to food descriptions so the app could, in theory, tell me if the chicken I bought is still good and display that in a table.  
-# If the web app had a mobile companion or an Alexa tie-in, I could report when something was used up.  
-# Think about those smart fridges where you have to scan every item to create an inventory, but what if it’s not stored in the fridge?  
-# By consuming the receipts, you get everything.  
-# I can also extract how frequently I buy something and analyze spending patterns over time. 
-#
-#
-# What "I" did was create a gmail account just for this.
-# I added it to outlook on my device.
-# You update line28 (replace "Account name" but keep the quotes example "albertsons@gmail.com")
-# I will output a access database to your MyDocuments folder by default to a file call Receipts.accdb - You can change the path in the variable just below.
-# Script updated to use AccessDB vs CSV and added duplicate checks in the event you requested the same receipt twice.
-#
+
 #set the email address
 $emailaccountname = "account.name@gmail.com"
 
-#set the output location
+
 # Path to the Access database
 $accessDbPath = "$([Environment]::GetFolderPath('MyDocuments'))\Receipts.accdb"
 
@@ -78,7 +56,7 @@ $inbox = $namespace.Folders.Item($emailaccountname)
 $gmailFolder = $inbox.Folders.Item("Inbox")
 $messages = $gmailFolder.Items
 
-# Ensure there are at least three emails
+
 if ($messages.Count -ge 1) {
     $connection = New-Object -ComObject ADODB.Connection
     $connection.Open($connectionString)
